@@ -17,8 +17,11 @@ import org.springframework.data.domain.PageRequest;
 /**
  * {@code (:param IS NULL OR ...)} 조합 쿼리가 Hibernate 6 / H2에서 실제로 도는지 잠근다.
  * 검색·필터·페이징은 재량으로 채운 지점이라 회귀가 조용히 난다.
+ *
+ * <p>{@code spring.sql.init.mode=never}: 슬라이스도 임베디드 DB라 {@code data.sql}이 함께 돌아
+ * 시드 사용자·작업이 섞여 들어온다. 이 테스트는 자기가 넣은 행만 세야 한다.
  */
-@DataJpaTest
+@DataJpaTest(properties = "spring.sql.init.mode=never")
 class TaskRepositoryTest {
 
     @Autowired

@@ -11,10 +11,8 @@ Java 17 · Spring Boot 3.3.13 · JPA(Hibernate) · H2 인메모리 · Gradle 8.1
 ```bash
 git clone <repository-url>
 cd 11thd-assignment
-./gradlew bootRun
+./gradlew bootRun          # 첫 실행 약 1~2분(JDK·의존성 조달), 이후 기동 약 2초
 ```
-
-로컬에 JDK 17이 없어도 됩니다. Gradle toolchain(`languageVersion 17`) + foojay-resolver가 빌드 시점에 JDK 17을 자동으로 조달합니다.
 
 
 | 항목             | 주소                                                                                                                      |
@@ -24,17 +22,15 @@ cd 11thd-assignment
 | H2 콘솔          | [http://localhost:8080/h2-console](http://localhost:8080/h2-console) (JDBC URL `jdbc:h2:mem:collab`, 사용자 `sa`, 비밀번호 없음) |
 
 
-테스트: `./gradlew test` (24개)
+로컬에 JDK 17이 없어도 됩니다. Gradle toolchain(`languageVersion 17`) + foojay-resolver가 빌드 시점에 JDK 17을 조달합니다.
+
+테스트: `./gradlew test` — 24개, 약 10초.
 
 ---
 
 ## 2. 실행 직후 기능 확인 절차
 
-인증은 구현 대상이 아니므로, 요청자는 **`X-User-Id` 헤더**로 식별합니다. Swagger UI에서는 모든 오퍼레이션에 `X-User-Id` 입력란이 이미 노출되어 있으므로 값만 넣으면 됩니다.
-
 ### 초기 데이터 (`src/main/resources/data.sql`)
-
-기동할 때마다 아래 데이터가 새로 적재됩니다.
 
 
 | 사용자   | id  | 프로젝트 1 · 스터디 플랫폼 개편 | 프로젝트 2 · 사내 위키 이관 |
@@ -44,54 +40,59 @@ cd 11thd-assignment
 | carol | 3   | 비멤버                 | **OWNER**         |
 
 
-프로젝트 1의 작업 4건:
+| 작업 id | 제목            | 상태          | 담당자   |
+| ----- | ------------- | ----------- | ----- |
+| 1     | 로그인 화면 리뉴얼    | IN_PROGRESS | alice |
+| 2     | 로그인 API 문서 작성 | TODO        | bob   |
+| 3     | 페이지네이션 버그 수정  | DONE        | bob   |
+| 4     | 검색 필터 추가      | TODO        | 없음    |
 
 
-| id  | 제목            | 상태          | 담당자   |
-| --- | ------------- | ----------- | ----- |
-| 1   | 로그인 화면 리뉴얼    | IN_PROGRESS | alice |
-| 2   | 로그인 API 문서 작성 | TODO        | bob   |
-| 3   | 페이지네이션 버그 수정  | DONE        | bob   |
-| 4   | 검색 필터 추가      | TODO        | 없음    |
-
+작업 1~4는 프로젝트 1 소속이고, 기동할 때마다 새로 적재됩니다.
 
 작업 5번(`위키 문서 목록 정리`)은 프로젝트 2 소속입니다 — 프로젝트 경계 검증용입니다.
+
+`X-User-Id` 헤더로 요청자를 식별합니다. Swagger UI는 모든 오퍼레이션에 입력란을 자동 노출합니다.
 
 ### 권한 규칙을 한 번에 확인하는 시나리오
 
 ```bash
-# 내가 속한 프로젝트만 나온다 — alice에게 프로젝트 2는 보이지 않는다
+# 1. 내가 속한 프로젝트만 나온다 — alice에게 프로젝트 2는 보이지 않는다
 curl -s -H 'X-User-Id: 1' localhost:8080/api/projects
 
-# 비멤버는 404 — "존재하지만 권한이 없다"조차 알려주지 않는다
+# 2. 비멤버는 404 — "존재하지만 권한이 없다"조차 알려주지 않는다
 curl -s -o /dev/null -w '%{http_code}\n' -H 'X-User-Id: 1' localhost:8080/api/projects/2   # 404
 
-# 멤버지만 역할이 부족하면 403
+# 3. 멤버지만 역할이 부족하면 403
 curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -H 'X-User-Id: 2' localhost:8080/api/projects/1   # 403
 
-# 유일한 OWNER는 강등할 수 없다
-curl -s -o /dev/null -w '%{http_code}\n' -X PATCH -H 'X-User-Id: 1' -H 'Content-Type: application/json' \
-     -d '{"role":"MEMBER"}' localhost:8080/api/projects/1/members/1   # 409
-
-# 동시 수정 충돌 — 같은 version을 두 번 보내면 두 번째가 거절된다
+# 4. 동시 수정 충돌 — 같은 version을 두 번 보내면 두 번째가 거절된다
 curl -s -X PATCH -H 'X-User-Id: 1' -H 'Content-Type: application/json' \
      -d '{"status":"DONE","version":0}' localhost:8080/api/projects/1/tasks/1   # 200, version 1
 curl -s -X PATCH -H 'X-User-Id: 1' -H 'Content-Type: application/json' \
      -d '{"status":"TODO","version":0}' localhost:8080/api/projects/1/tasks/1   # 409
 
-# 검색 · 상태 필터 · 페이징
-# 한글 keyword는 URL 인코딩이 필요합니다(Tomcat이 쿼리 문자열의 비-ASCII 원문을 400으로 거절).
-# 브라우저와 Swagger UI는 자동으로 처리하므로 이 문제는 curl에서만 발생합니다.
+# 5. 검색 · 상태 필터 · 페이징
 curl -s -G -H 'X-User-Id: 1' --data-urlencode 'keyword=로그인' \
      -d 'status=TODO' -d 'page=0' -d 'size=2' \
      localhost:8080/api/projects/1/tasks
 ```
 
+5번의 한글 keyword는 URL 인코딩이 필요합니다. Tomcat이 쿼리 문자열의 비-ASCII 원문을 400으로 거절하기 때문이고, 브라우저와 Swagger UI는 자동으로 인코딩하므로 curl에서만 발생합니다.
+
+### 지금 되는 것
+
+- 내가 속한 프로젝트만 조회 — 비멤버에게는 존재조차 숨김(404)
+- 멤버지만 역할이 부족하면 403
+- 마지막 OWNER 강등·제거 차단(409)
+- 작업 동시 수정 충돌 감지 — PATCH·DELETE 모두 409
+- 작업 검색 · 상태 필터 · 페이징
+
+다음: `./gradlew test` 실행 (약 10초).
+
 ---
 
 ## 3. REST API 명세 요약
-
-`X-User-Id` 헤더는 사용자 등록·조회를 제외한 모든 엔드포인트에서 필수입니다. 없거나 숫자가 아니면 400.
 
 ### 사용자
 
@@ -101,6 +102,8 @@ curl -s -G -H 'X-User-Id: 1' --data-urlencode 'keyword=로그인' \
 | POST | `/api/users`      | —   | 201 + `Location`. 이메일 중복 시 409 |
 | GET  | `/api/users/{id}` | —   | 200 / 404                      |
 
+
+`X-User-Id` 헤더는 위 두 엔드포인트를 제외한 모든 경로에서 필수입니다. 없거나 숫자가 아니면 400.
 
 ### 프로젝트
 
@@ -130,14 +133,12 @@ curl -s -G -H 'X-User-Id: 1' --data-urlencode 'keyword=로그인' \
 
 | 메서드    | 경로                                         | 권한                   | 비고                                    |
 | ------ | ------------------------------------------ | -------------------- | ------------------------------------- |
-| POST   | `/api/projects/{projectId}/tasks`          | 멤버                   | `status` 생략 시 `TODO`                  |
+| POST   | `/api/projects/{projectId}/tasks`          | 멤버                   | 상태는 `TODO`·`IN_PROGRESS`·`DONE`. 생략 시 `TODO` |
 | GET    | `/api/projects/{projectId}/tasks`          | 멤버                   | `?keyword=&status=&page=&size=&sort=` |
 | GET    | `/api/projects/{projectId}/tasks/{taskId}` | 멤버                   | 타 프로젝트 작업은 404                        |
-| PATCH  | `/api/projects/{projectId}/tasks/{taskId}` | 담당자 본인, OWNER, ADMIN | 본문 **`version` 필수**. 불일치 409          |
+| PATCH  | `/api/projects/{projectId}/tasks/{taskId}` | 담당자 본인, OWNER, ADMIN | 본문 **`version` 필수**. 불일치 409. 상태 전이 제약 없음 |
 | DELETE | `/api/projects/{projectId}/tasks/{taskId}` | 담당자 본인, OWNER, ADMIN | **`?version=` 필수**. 불일치 409, 누락 400, 성공 204 |
 
-
-작업 상태는 `TODO` · `IN_PROGRESS` · `DONE` 3단계입니다(과제가 지원자 재량으로 명시). 상태 전이 규칙은 요구가 없어 두지 않았습니다.
 
 ### 요청 · 응답 예시
 

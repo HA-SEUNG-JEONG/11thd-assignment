@@ -1,6 +1,7 @@
 package com.example.collab.project;
 
 import com.example.collab.common.exception.ConflictException;
+import com.example.collab.common.exception.ForbiddenException;
 import com.example.collab.common.exception.NotFoundException;
 import com.example.collab.project.dto.ProjectMemberAddRequest;
 import com.example.collab.project.dto.ProjectMemberResponse;
@@ -35,7 +36,9 @@ public class ProjectMemberService {
      */
     @Transactional
     public ProjectMemberResponse add(Long projectId, Long userId, ProjectMemberAddRequest request) {
-        accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
+        ProjectMember actor =
+                accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
+        requireOwnerActorForOwnerRole(actor, request.role());
 
         User target = userRepository.findById(request.userId())
                 .orElseThrow(() -> new NotFoundException("User not found: " + request.userId()));
@@ -55,9 +58,13 @@ public class ProjectMemberService {
     @Transactional
     public ProjectMemberResponse changeRole(Long projectId, Long userId, Long targetUserId,
                                             ProjectMemberRoleUpdateRequest request) {
-        accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
+        ProjectMember actor =
+                accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
 
         ProjectMember target = loadMember(projectId, targetUserId);
+        requireOwnerActorForOwnerRole(actor, target.getRole());   // OWNER를 건드리는가
+        requireOwnerActorForOwnerRole(actor, request.role());     // OWNER를 만드는가
+
         if (request.role() != ProjectRole.OWNER) {
             requireNotLastOwner(projectId, target);
         }
@@ -68,9 +75,11 @@ public class ProjectMemberService {
 
     @Transactional
     public void remove(Long projectId, Long userId, Long targetUserId) {
-        accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
+        ProjectMember actor =
+                accessGuard.requireRole(projectId, userId, ProjectRole.OWNER, ProjectRole.ADMIN);
 
         ProjectMember target = loadMember(projectId, targetUserId);
+        requireOwnerActorForOwnerRole(actor, target.getRole());
         requireNotLastOwner(projectId, target);
 
         projectMemberRepository.delete(target);
@@ -79,6 +88,16 @@ public class ProjectMemberService {
     private ProjectMember loadMember(Long projectId, Long targetUserId) {
         return projectMemberRepository.findByProjectIdAndUserId(projectId, targetUserId)
                 .orElseThrow(() -> new NotFoundException("Member not found: " + targetUserId));
+    }
+
+    /**
+     * OWNER 계층은 OWNER만 만지고 만든다. 이 가드가 없으면 ADMIN이 자신을 OWNER로 승격한 뒤
+     * 원래 OWNER를 제거해 OWNER 전용 권한(프로젝트 삭제)까지 도달한다 — 권한 상승이다.
+     */
+    private void requireOwnerActorForOwnerRole(ProjectMember actor, ProjectRole role) {
+        if (role == ProjectRole.OWNER && actor.getRole() != ProjectRole.OWNER) {
+            throw new ForbiddenException("Only OWNER can grant or modify OWNER");
+        }
     }
 
     /** OWNER 최소 1명 불변식. 역할 변경과 제거 두 경로가 모두 여기를 통과해야 한다. */

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.collab.common.exception.ConflictException;
+import com.example.collab.common.exception.ForbiddenException;
 import com.example.collab.project.dto.ProjectMemberAddRequest;
 import com.example.collab.project.dto.ProjectMemberResponse;
 import com.example.collab.project.dto.ProjectMemberRoleUpdateRequest;
@@ -57,6 +58,32 @@ class ProjectMemberServiceTest {
                 PROJECT_ID, ALICE, ALICE, new ProjectMemberRoleUpdateRequest(ProjectRole.MEMBER));
 
         assertThat(demoted.role()).isEqualTo(ProjectRole.MEMBER);
+    }
+
+    /**
+     * 권한 상승 경로를 잠근다: ADMIN이 자신을 OWNER로 올릴 수 있으면 그 다음 원래 OWNER를 제거해
+     * OWNER 전용 권한(프로젝트 삭제)까지 도달한다. 두 테스트가 그 사슬의 두 고리를 각각 끊는다.
+     */
+    @Test
+    @DisplayName("ADMIN이 자신을 OWNER로 승격하면 403")
+    void adminCannotPromoteSelfToOwner() {
+        projectMemberService.changeRole(
+                PROJECT_ID, ALICE, BOB, new ProjectMemberRoleUpdateRequest(ProjectRole.ADMIN));
+
+        assertThatThrownBy(() -> projectMemberService.changeRole(
+                        PROJECT_ID, BOB, BOB, new ProjectMemberRoleUpdateRequest(ProjectRole.OWNER)))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("ADMIN이 OWNER를 강등하면 403 — OWNER를 건드리는 것도 OWNER만 가능하다")
+    void adminCannotDemoteOwner() {
+        projectMemberService.changeRole(
+                PROJECT_ID, ALICE, BOB, new ProjectMemberRoleUpdateRequest(ProjectRole.ADMIN));
+
+        assertThatThrownBy(() -> projectMemberService.changeRole(
+                        PROJECT_ID, BOB, ALICE, new ProjectMemberRoleUpdateRequest(ProjectRole.MEMBER)))
+                .isInstanceOf(ForbiddenException.class);
     }
 
     @Test

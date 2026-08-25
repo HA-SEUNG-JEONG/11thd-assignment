@@ -193,11 +193,7 @@ Content-Type: application/problem+json
 
 ### 4.1 작업 동시 수정 충돌 — 애플리케이션 레벨 version 비교 + `@Version`
 
-과제가 "결정하고 **구현**하라"고 명시한 유일한 항목입니다.
-
-**문제를 먼저 정확히 봤습니다.** 실제 시나리오는 *트랜잭션 밖*의 충돌입니다. A가 화면을 열어 작업을 읽고(트랜잭션 1 종료), B가 수정하고, 한참 뒤 A가 저장합니다(트랜잭션 2 시작). 두 트랜잭션은 시간적으로 겹치지 않습니다.
-
-**선택.** 응답에 `version`을 실어 보내고, 클라이언트가 수정 요청에 그대로 되돌려보냅니다. 서비스가 명시적으로 비교합니다.
+**결론.** 응답에 `version`을 실어 보내고, 클라이언트가 수정 요청에 그대로 되돌려보냅니다. 서비스가 명시적으로 비교해 불일치하면 **409**입니다.
 
 ```java
 if (!Objects.equals(request.version(), task.getVersion())) {
@@ -205,7 +201,9 @@ if (!Objects.equals(request.version(), task.getVersion())) {
 }
 ```
 
-**`@Version` 애노테이션만으로는 이 상황이 잡히지 않습니다.** 한 요청 안에서 `load → modify → save` 하면 Hibernate는 *방금 읽은* version과 비교하므로, 클라이언트가 낡은 version을 보내도 통과합니다(관리 상태 엔티티에 `setVersion()`을 수동 호출해도 무시됩니다). 그래서 두 겹으로 뒀습니다.
+과제가 "결정하고 **구현**하라"고 명시한 유일한 항목이라, 문제부터 정확히 봤습니다. 실제 시나리오는 *트랜잭션 밖*의 충돌입니다. A가 화면을 열어 작업을 읽고(트랜잭션 1 종료), B가 수정하고, 한참 뒤 A가 저장합니다(트랜잭션 2 시작). 두 트랜잭션은 시간적으로 겹치지 않습니다.
+
+**그래서 `@Version` 애노테이션만으로는 이 상황이 잡히지 않습니다.** 한 요청 안에서 `load → modify → save` 하면 Hibernate는 *방금 읽은* version과 비교하므로, 클라이언트가 낡은 version을 보내도 통과합니다(관리 상태 엔티티에 `setVersion()`을 수동 호출해도 무시됩니다). 그래서 두 겹으로 뒀습니다.
 
 - **애플리케이션 레벨 비교** — 트랜잭션 밖 충돌(= 과제가 말한 상황)을 잡습니다. 이쪽이 본체입니다
 - **`@Version` 컬럼** — 진짜로 겹친 동시 트랜잭션을 DB 레벨에서 잡습니다(`ObjectOptimisticLockingFailureException` → 409)
@@ -244,12 +242,14 @@ ProjectMember requireRole(Long projectId, Long userId, ProjectRole... allowed); 
 
 ### 4.3 요청자 식별 — `X-User-Id` 헤더 + `@CurrentUser` ArgumentResolver
 
-과제 문구는 "요청자의 식별자는 API 파라미터로 전달된다고 가정합니다"입니다. **문자 그대로의 쿼리 파라미터 대신 헤더를 골랐습니다.** 이유는 하나입니다 — 인증을 실제 구현(JWT/세션)으로 교체할 때 **변경 지점이 resolver 한 곳**이기 때문입니다. 인증 정보는 리소스 파라미터와 다른 공간에 있어야 합니다.
+**결론.** 문자 그대로의 쿼리 파라미터 대신 **헤더**를 골랐습니다. 이유는 하나입니다 — 인증을 실제 구현(JWT/세션)으로 교체할 때 **변경 지점이 resolver 한 곳**이기 때문입니다.
 
 ```java
 @GetMapping("/api/projects")
 Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) { ... }
 ```
+
+과제 문구는 "요청자의 식별자는 API 파라미터로 전달된다고 가정합니다"입니다. 인증 정보는 리소스 파라미터와 다른 공간에 있어야 한다고 봤습니다.
 
 | 기각한 대안 | 이유 |
 |---|---|
@@ -326,7 +326,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 ### 쓰지 않기로 한 기술
 
-과제가 "쓰지 않기로 한 판단도 똑같이 좋은 답"이라고 명시해서, 기각 이유도 같은 무게로 적었습니다. 기준은 "복잡해서"가 아니라 **어느 요구를 위협하는가**입니다.
+기준은 "복잡해서"가 아니라 **어느 요구를 위협하는가**입니다. 과제가 "쓰지 않기로 한 판단도 똑같이 좋은 답"이라고 명시해서, 기각 이유도 같은 무게로 적었습니다.
 
 | 기술 | 이유 |
 |---|---|

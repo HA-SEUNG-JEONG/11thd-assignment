@@ -10,6 +10,7 @@ public record TaskResponse(
         String description,
         TaskStatus status,
         Long assigneeId,
+        Long version,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
@@ -21,6 +22,7 @@ public record TaskResponse(
                 task.getDescription(),
                 task.getStatus(),
                 task.getAssigneeId(),
+                task.getVersion(),
                 task.getCreatedAt(),
                 task.getUpdatedAt());
     }

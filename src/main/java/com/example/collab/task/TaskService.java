@@ -1,5 +1,6 @@
 package com.example.collab.task;
 
+import com.example.collab.common.exception.ConflictException;
 import com.example.collab.common.exception.ForbiddenException;
 import com.example.collab.common.exception.NotFoundException;
 import com.example.collab.project.ProjectAccessGuard;
@@ -9,6 +10,7 @@ import com.example.collab.task.dto.TaskCreateRequest;
 import com.example.collab.task.dto.TaskResponse;
 import com.example.collab.task.dto.TaskUpdateRequest;
 import com.example.collab.user.User;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +52,13 @@ public class TaskService {
     public TaskResponse update(
             Long projectId, Long userId, Long taskId, TaskUpdateRequest request) {
         Task task = loadWritableTask(projectId, userId, taskId);
+
+        // 권한(403) 뒤, 수정(409) 앞. 순서가 바뀌면 권한 없는 사용자가 409/403 차이로
+        // 다른 사람이 이미 고쳤는지를 알아낸다.
+        if (!Objects.equals(request.version(), task.getVersion())) {
+            throw new ConflictException("Task was modified by another user");
+        }
+
         User assignee = resolveAssignee(projectId, request.assigneeId());
         task.update(request.title(), request.description(), request.status(), assignee);
 

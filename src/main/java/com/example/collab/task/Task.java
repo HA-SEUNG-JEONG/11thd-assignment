@@ -15,6 +15,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -48,6 +49,13 @@ public class Task extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private User assignee;
+
+    /**
+     * 진짜로 겹친 트랜잭션에 대한 2차 방어선. 과제가 말한 충돌(트랜잭션 밖 read-modify-write)은
+     * 이 애노테이션만으로는 잡히지 않는다 — 서비스의 명시 비교가 본체다.
+     */
+    @Version
+    private Long version;
 
     public Task(Project project, String title, String description, TaskStatus status, User assignee) {
         this.project = project;

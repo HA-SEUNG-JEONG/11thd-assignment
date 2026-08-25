@@ -86,6 +86,11 @@ public class Task extends BaseTimeEntity {
         }
     }
 
+    /** 멤버 제거 시 담당자를 비운다. update()의 "null = 미변경" 규칙과 섞이지 않게 별도 메서드로 둔다. */
+    public void unassign() {
+        this.assignee = null;
+    }
+
     /**
      * LAZY 프록시의 식별자만 읽는다 — 프록시가 초기화되지 않으므로 목록 응답에서 N+1이 나지 않는다.
      * 응답 DTO는 이 값만 쓰고 담당자 이름은 노출하지 않는다.

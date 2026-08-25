@@ -6,6 +6,8 @@ import com.example.collab.common.exception.NotFoundException;
 import com.example.collab.project.dto.ProjectMemberAddRequest;
 import com.example.collab.project.dto.ProjectMemberResponse;
 import com.example.collab.project.dto.ProjectMemberRoleUpdateRequest;
+import com.example.collab.task.Task;
+import com.example.collab.task.TaskRepository;
 import com.example.collab.user.User;
 import com.example.collab.user.UserRepository;
 import java.util.List;
@@ -21,6 +23,7 @@ public class ProjectMemberService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
+    private final TaskRepository taskRepository;
     private final ProjectAccessGuard accessGuard;
 
     public List<ProjectMemberResponse> findAll(Long projectId, Long userId) {
@@ -81,6 +84,11 @@ public class ProjectMemberService {
         ProjectMember target = loadMember(projectId, targetUserId);
         requireOwnerActorForOwnerRole(actor, target.getRole());
         requireNotLastOwner(projectId, target);
+
+        // 담당자는 멤버여야 한다는 불변식이 제거 경로에서도 유지되어야 한다. 엔티티를 로드해
+        // dirty checking으로 비운다 — 벌크 UPDATE는 영속성 컨텍스트를 우회하고 @Version을
+        // 올리지 않아, 담당자가 풀린 작업을 낡은 version으로 계속 수정할 수 있다.
+        taskRepository.findAllByProjectIdAndAssignee_Id(projectId, targetUserId).forEach(Task::unassign);
 
         projectMemberRepository.delete(target);
     }

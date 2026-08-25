@@ -8,6 +8,9 @@ import com.example.collab.common.exception.ForbiddenException;
 import com.example.collab.project.dto.ProjectMemberAddRequest;
 import com.example.collab.project.dto.ProjectMemberResponse;
 import com.example.collab.project.dto.ProjectMemberRoleUpdateRequest;
+import com.example.collab.task.Task;
+import com.example.collab.task.TaskRepository;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,8 +33,14 @@ class ProjectMemberServiceTest {
     private static final Long ALICE = 1L;
     private static final Long BOB = 2L;
 
+    /** 시드에서 bob이 담당하는 P1 작업. */
+    private static final List<Long> BOB_TASKS = List.of(2L, 3L);
+
     @Autowired
     private ProjectMemberService projectMemberService;
+
+    @Autowired
+    private TaskRepository taskRepository;
 
     @Test
     @DisplayName("유일한 OWNER를 다른 역할로 바꾸면 409")
@@ -86,11 +95,32 @@ class ProjectMemberServiceTest {
                 .isInstanceOf(ForbiddenException.class);
     }
 
+    /**
+     * "담당자는 프로젝트 멤버여야 한다"는 불변식이 제거 경로에서도 성립하는지 잠근다.
+     * 비우지 않으면 제거된 사용자가 담당자로 남고, 본인은 그 작업을 조회할 때 404를 받는다.
+     */
+    @Test
+    @DisplayName("멤버를 제거하면 그 사람이 담당하던 작업의 담당자가 비워진다")
+    void removingMemberUnassignsTheirTasks() {
+        assertThat(assigneeIdsOf(BOB_TASKS)).containsOnly(BOB);
+
+        projectMemberService.remove(PROJECT_ID, ALICE, BOB);
+
+        assertThat(assigneeIdsOf(BOB_TASKS)).containsOnlyNulls();
+    }
+
     @Test
     @DisplayName("이미 멤버인 사용자를 다시 추가하면 409")
     void cannotAddDuplicateMember() {
         assertThatThrownBy(() -> projectMemberService.add(
                         PROJECT_ID, ALICE, new ProjectMemberAddRequest(BOB, ProjectRole.MEMBER)))
                 .isInstanceOf(ConflictException.class);
+    }
+
+    private List<Long> assigneeIdsOf(List<Long> taskIds) {
+        return taskIds.stream()
+                .map(id -> taskRepository.findById(id).orElseThrow())
+                .map(Task::getAssigneeId)
+                .toList();
     }
 }

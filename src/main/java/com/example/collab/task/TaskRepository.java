@@ -1,5 +1,6 @@
 package com.example.collab.task;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +28,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     /** 단건 조회도 프로젝트 경계를 함께 건다 — findById면 타 프로젝트 작업이 유출된다. */
     Optional<Task> findByIdAndProjectId(Long id, Long projectId);
+
+    /**
+     * 멤버 제거 시 그 사람 담당 작업을 비우기 위해 쓴다. 프로젝트 경계를 함께 건다.
+     * {@code Assignee_Id}로 끊어 주지 않으면 파서가 {@code assigneeId} 속성을 먼저 찾다 실패한다.
+     */
+    List<Task> findAllByProjectIdAndAssignee_Id(Long projectId, Long assigneeId);
 
     /** 프로젝트 삭제 시 tasks가 남으면 FK 위반. cascade 대신 명시 삭제(경로가 코드에 보인다). */
     void deleteByProjectId(Long projectId);

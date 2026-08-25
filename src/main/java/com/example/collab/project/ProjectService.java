@@ -4,6 +4,7 @@ import com.example.collab.common.exception.NotFoundException;
 import com.example.collab.project.dto.ProjectCreateRequest;
 import com.example.collab.project.dto.ProjectResponse;
 import com.example.collab.project.dto.ProjectUpdateRequest;
+import com.example.collab.task.TaskRepository;
 import com.example.collab.user.User;
 import com.example.collab.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final ProjectAccessGuard accessGuard;
 
@@ -58,11 +60,15 @@ public class ProjectService {
         return ProjectResponse.from(projectRepository.saveAndFlush(project));
     }
 
-    /** 멤버 행을 먼저 지운다. cascade 대신 명시 삭제 — 삭제 경로가 코드에 드러나야 한다. */
+    /**
+     * 자식 행을 먼저 지운다. cascade 대신 명시 삭제 — 삭제 경로가 코드에 드러나야 한다.
+     * 작업이 멤버를 참조하지는 않지만, 둘 다 프로젝트를 참조하므로 프로젝트보다 먼저 사라져야 한다.
+     */
     @Transactional
     public void delete(Long projectId, Long userId) {
         accessGuard.requireRole(projectId, userId, ProjectRole.OWNER);
 
+        taskRepository.deleteByProjectId(projectId);
         projectMemberRepository.deleteByProjectId(projectId);
         projectRepository.delete(loadProject(projectId));
     }

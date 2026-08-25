@@ -1,7 +1,9 @@
 package com.example.collab.task;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,9 +70,61 @@ class TaskConcurrencyTest {
                 .andExpect(jsonPath("$.title").value("먼저 도착한 수정"));
     }
 
+    /**
+     * 삭제도 같은 분실 갱신 문제를 안는다 — 남이 이미 고친 작업을 낡은 화면에서 그대로 지우는 것.
+     *
+     * <p>이 클래스에는 테스트 {@code @Transactional}이 없어 삭제가 공유 H2에 영구 반영된다.
+     * 그래서 시드 작업이 아니라 이 테스트가 직접 만든 작업만 지운다.
+     */
+    @Test
+    @DisplayName("낡은 version으로 삭제하면 409, 맞는 version이어야 지워진다")
+    void staleVersionDeleteIsRejected() throws Exception {
+        String createdUrl = createTask();
+        long version = currentVersion(createdUrl);
+
+        mockMvc.perform(delete(createdUrl)
+                        .header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE)
+                        .param("version", String.valueOf(version + 1)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Task was modified by another user"));
+
+        mockMvc.perform(delete(createdUrl)
+                        .header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE)
+                        .param("version", String.valueOf(version)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get(createdUrl).header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("version 없이 삭제하면 400 — 낡은 화면인지 판단할 근거 자체가 없다")
+    void deleteWithoutVersionIsRejected() throws Exception {
+        mockMvc.perform(delete(TASK_URL).header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 이 테스트만 소유하는 작업을 만든다. 시드 작업을 지우면 공유 H2에 영구 반영된다. */
+    private String createTask() throws Exception {
+        return mockMvc.perform(post("/api/projects/1/tasks")
+                        .header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title": "삭제 version 검사용 작업"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+    }
+
     private long currentVersion() throws Exception {
+        return currentVersion(TASK_URL);
+    }
+
+    private long currentVersion(String url) throws Exception {
         String body = mockMvc.perform(
-                        get(TASK_URL).header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE))
+                        get(url).header(CurrentUserArgumentResolver.USER_ID_HEADER, ALICE))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()

@@ -52,12 +52,7 @@ public class TaskService {
     public TaskResponse update(
             Long projectId, Long userId, Long taskId, TaskUpdateRequest request) {
         Task task = loadWritableTask(projectId, userId, taskId);
-
-        // 권한(403) 뒤, 수정(409) 앞. 순서가 바뀌면 권한 없는 사용자가 409/403 차이로
-        // 다른 사람이 이미 고쳤는지를 알아낸다.
-        if (!Objects.equals(request.version(), task.getVersion())) {
-            throw new ConflictException("Task was modified by another user");
-        }
+        requireCurrentVersion(task, request.version());
 
         User assignee = resolveAssignee(projectId, request.assigneeId());
         task.update(request.title(), request.description(), request.status(), assignee);
@@ -67,9 +62,22 @@ public class TaskService {
         return TaskResponse.from(taskRepository.saveAndFlush(task));
     }
 
+    /** 삭제도 분실 갱신이다 — 남이 이미 고친 작업을 낡은 화면에서 그대로 지우는 것을 막는다. */
     @Transactional
-    public void delete(Long projectId, Long userId, Long taskId) {
-        taskRepository.delete(loadWritableTask(projectId, userId, taskId));
+    public void delete(Long projectId, Long userId, Long taskId, Long version) {
+        Task task = loadWritableTask(projectId, userId, taskId);
+        requireCurrentVersion(task, version);
+        taskRepository.delete(task);
+    }
+
+    /**
+     * 권한(403) 뒤, 변경(409) 앞. 순서가 바뀌면 권한 없는 사용자가 409/403 차이로
+     * 다른 사람이 이미 고쳤는지를 알아낸다. 수정·삭제 두 경로가 같은 비교와 같은 메시지를 쓴다.
+     */
+    private void requireCurrentVersion(Task task, Long version) {
+        if (!Objects.equals(version, task.getVersion())) {
+            throw new ConflictException("Task was modified by another user");
+        }
     }
 
     /**

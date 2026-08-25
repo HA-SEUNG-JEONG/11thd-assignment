@@ -13,7 +13,7 @@ Java 17 · Spring Boot 3.3.13 · JPA(Hibernate) · H2 인메모리 · Gradle 8.1
 
 ---
 
-## 1. 빌드 & 실행
+## 빌드 & 실행
 
 ```bash
 git clone <repository-url>
@@ -35,7 +35,7 @@ cd 11thd-assignment
 
 ---
 
-## 2. 실행 직후 기능 확인 절차
+## 실행 직후 기능 확인 절차
 
 ### 초기 데이터 (`src/main/resources/data.sql`)
 
@@ -88,7 +88,7 @@ curl -s -G -H 'X-User-Id: 1' --data-urlencode 'keyword=로그인' \
 
 ---
 
-## 3. REST API 명세 요약
+## REST API 명세 요약
 
 ### 사용자
 
@@ -202,9 +202,9 @@ Content-Type: application/problem+json
 
 ---
 
-## 4. 주요 설계 결정과 그 이유
+## 주요 설계 결정과 그 이유
 
-### 4.1 작업 동시 수정 충돌 — 애플리케이션 레벨 version 비교 + `@Version`
+### 작업 동시 수정 충돌 — 애플리케이션 레벨 version 비교 + `@Version`
 
 **결론.** 응답에 `version`을 실어 보내고, 클라이언트가 수정 요청에 그대로 되돌려보냅니다. 서비스가 명시적으로 비교해 불일치하면 **409**입니다. 이 비교는 **수정(PATCH)과 삭제(DELETE) 둘 다**에 걸립니다 — 삭제도 분실 갱신이기 때문입니다. 남이 이미 고친 작업을 낡은 화면에서 그대로 지우면 그 수정이 통째로 사라집니다. PATCH는 본문 `version`, DELETE는 본문이 없으므로 `?version=` 쿼리 파라미터입니다.
 
@@ -228,7 +228,7 @@ if (!Objects.equals(request.version(), task.getVersion())) {
 
 **감수한 비용.** 클라이언트가 `version`을 들고 다녀야 하고, 응답 DTO에 `version`이 노출됩니다. 충돌 시 재시도(다시 읽고 다시 보내기)는 클라이언트 몫입니다.
 
-### 4.2 접근 거부 코드 — 비멤버 404, 멤버지만 역할 부족 403
+### 접근 거부 코드 — 비멤버 404, 멤버지만 역할 부족 403
 
 **결론.** 취향이 아니라 명세가 강제한 결론입니다. 규칙은 `ProjectAccessGuard` 한 곳에 있고, 전 도메인이 이 게이트를 통과합니다.
 
@@ -250,7 +250,7 @@ ProjectMember requireRole(Long projectId, Long userId, ProjectRole... allowed); 
 
 **감수한 비용.** 설명할 규칙이 하나 늘었습니다. 디버깅 시 구분은 `ProblemDetail`의 `detail` 메시지로 보완합니다.
 
-### 4.3 요청자 식별 — `X-User-Id` 헤더 + `@CurrentUser` ArgumentResolver
+### 요청자 식별 — `X-User-Id` 헤더 + `@CurrentUser` ArgumentResolver
 
 **결론.** 문자 그대로의 쿼리 파라미터 대신 **헤더**를 골랐습니다. 이유는 하나입니다 — 인증을 실제 구현(JWT/세션)으로 교체할 때 **변경 지점이 resolver 한 곳**이기 때문입니다.
 
@@ -272,7 +272,7 @@ Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) { ..
 
 **감수한 비용.** "파라미터"의 문자적 해석과 다릅니다. Swagger 입력이 번거로워지는 문제는 `OperationCustomizer` 약 10줄로 `X-User-Id`를 전 오퍼레이션에 자동 주입해 해소했습니다.
 
-### 4.4 응답 형식 — 성공은 bare DTO, 오류는 RFC 9457
+### 응답 형식 — 성공은 bare DTO, 오류는 RFC 9457
 
 **결론.** 공통 envelope(`ApiResponse<T>`)을 쓰지 않았습니다. `spring.mvc.problemdetails.enabled: true` 한 줄로 끝나고, Spring Boot 3 내장이라 추가 의존성이 0입니다.
 
@@ -281,7 +281,7 @@ Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) { ..
 
 **감수한 비용.** envelope의 실익인 traceId 같은 공통 메타를 실을 자리가 없습니다. 이 규모에서는 요구가 없습니다.
 
-### 4.5 패키지 구조 — 도메인형
+### 패키지 구조 — 도메인형
 
 ```
 com.example.collab
@@ -294,7 +294,7 @@ com.example.collab
 **왜.** 이 과제의 난이도 핵심은 권한 규칙인데, 그게 전부 `project/` 한 폴더에 응집됩니다. 계층형(`controller/ service/ repository/`)이면 `ProjectService`·`TaskService`·`ProjectAccessGuard`가 각각 다른 폴더로 흩어져, 권한 규칙 한 덩어리를 읽으려면 폴더 4개를 오가며 읽어야 합니다. 도메인이 3개뿐이라 폴더 폭발도 없습니다.
 계층 간 책임 분리(컨트롤러에 로직 없음, 엔티티 직접 노출 없음)는 그대로 지킵니다 — 폴더 배치와 별개 문제입니다.
 
-### 4.6 작업 목록 검색·필터·페이징 — 단일 `@Query`
+### 작업 목록 검색·필터·페이징 — 단일 `@Query`
 
 ```java
 @Query("""
@@ -311,7 +311,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 **감수한 비용.** 조건이 6~7개로 늘면 읽기 어려워집니다. 그 시점이 QueryDSL 도입이 정당해지는 시점이고, 이 과제 범위에서는 오지 않습니다.
 
-### 4.7 그 밖의 판단 — 권한 모델 관련 5건
+### 그 밖의 판단 — 권한 모델 관련 5건
 
 
 | 항목      | 결정                                | 근거                                                                              |
@@ -335,7 +335,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 ---
 
-## 5. 사용한 기술과 선택 이유
+## 사용한 기술과 선택 이유
 
 
 | 기술                                    | 이유                                                                                                 |
@@ -381,7 +381,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 ---
 
-## 6. 여러 회사가 함께 쓰고 데이터가 완전히 분리되어야 한다면
+## 여러 회사가 함께 쓰고 데이터가 완전히 분리되어야 한다면
 
 ### 격리 모델 선택
 
@@ -412,7 +412,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 ---
 
-## 7. 구현하지 못한 부분과, 시간이 더 있었다면
+## 구현하지 못한 부분과, 시간이 더 있었다면
 
 
 | 항목                | 현재 상태                    | 더 있었다면                                                                                                                                                                     |
@@ -434,4 +434,4 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 
 ---
 
-다음: `./gradlew test` 실행 (약 10초). 통과하면 §2의 확인 시나리오 5개를 순서대로 실행하면 됩니다.
+다음: `./gradlew test` 실행 (약 10초). 통과하면 "권한 규칙을 한 번에 확인하는 시나리오"의 curl 5개를 순서대로 실행하면 됩니다.

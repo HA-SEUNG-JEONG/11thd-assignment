@@ -74,7 +74,11 @@ curl -s -X PATCH -H 'X-User-Id: 1' -H 'Content-Type: application/json' \
      -d '{"status":"TODO","version":0}' localhost:8080/api/projects/1/tasks/1   # 409
 
 # 검색 · 상태 필터 · 페이징
-curl -s -H 'X-User-Id: 1' 'localhost:8080/api/projects/1/tasks?keyword=로그인&status=TODO&page=0&size=2'
+# 한글 keyword는 URL 인코딩이 필요합니다(Tomcat이 쿼리 문자열의 비-ASCII 원문을 400으로 거절).
+# 브라우저와 Swagger UI는 자동으로 처리하므로 이 문제는 curl에서만 발생합니다.
+curl -s -G -H 'X-User-Id: 1' --data-urlencode 'keyword=로그인' \
+     -d 'status=TODO' -d 'page=0' -d 'size=2' \
+     localhost:8080/api/projects/1/tasks
 ```
 
 ---

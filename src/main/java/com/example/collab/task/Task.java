@@ -66,9 +66,7 @@ public class Task extends BaseTimeEntity {
     }
 
     /**
-     * 부분 수정. null은 "미변경"을 뜻한다.
-     *
-     * <p>따라서 담당자 해제는 v1에서 지원하지 않는다 — 교체만 가능하다.
+     * 담당자 해제는 v1에서 지원하지 않는다 — 교체만 가능하다.
      * PATCH의 null 규칙을 도메인 전체에서 하나로 유지하기 위한 의도적 제약.
      */
     public void update(String title, String description, TaskStatus status, User assignee) {

@@ -218,7 +218,9 @@ if (!Objects.equals(request.version(), task.getVersion())) {
 ```
 
 **왜.** 실제 시나리오는 *트랜잭션 밖*의 충돌입니다. A가 화면을 열어 작업을 읽고(트랜잭션 1 종료), B가 수정하고, 한참 뒤 A가 저장합니다(트랜잭션 2 시작). 두 트랜잭션은 시간적으로 겹치지 않습니다.
+
 `@Version` 애노테이션만으로는 이 상황이 잡히지 않습니다. 한 요청 안에서 `load → modify → save` 하면 Hibernate는 *방금 읽은* version과 비교하므로, 클라이언트가 낡은 version을 보내도 통과합니다. 그래서 두 겹으로 뒀습니다 — **애플리케이션 레벨 비교**가 트랜잭션 밖 충돌(= 과제가 말한 상황)을 잡는 본체이고, **`@Version` 컬럼**이 진짜로 겹친 동시 트랜잭션을 DB 레벨에서 잡습니다(`ObjectOptimisticLockingFailureException` → 409).
+
 검사 순서도 고정했습니다: **권한(403) → version 비교(409) → 수정**. 순서가 바뀌면 권한 없는 사용자가 403/409 차이로 "다른 사람이 이미 고쳤는지"를 알아낼 수 있습니다.
 
 
@@ -240,8 +242,10 @@ ProjectMember requireMember(Long projectId, Long userId);                       
 ProjectMember requireRole(Long projectId, Long userId, ProjectRole... allowed); // 실패 → 403
 ```
 
-**왜.** 과제가 "프로젝트에 속하지 않은 사용자는 **조회를 포함해** 아무것도 할 수 없다"고 했는데, 403을 주면 "그 id의 프로젝트는 존재한다"가 노출되어 id를 순서대로 요청하는 것만으로 프로젝트 존재 여부를 전수 조사할 수 있습니다.  
-반대로 이미 경계 안에 있는 멤버에게 404를 주면 "내 프로젝트가 사라졌나?"로 오해합니다. 여기선 403이 정확합니다.  
+**왜.** 과제가 "프로젝트에 속하지 않은 사용자는 **조회를 포함해** 아무것도 할 수 없다"고 했는데, 403을 주면 "그 id의 프로젝트는 존재한다"가 노출되어 id를 순서대로 요청하는 것만으로 프로젝트 존재 여부를 전수 조사할 수 있습니다.
+
+반대로 이미 경계 안에 있는 멤버에게 404를 주면 "내 프로젝트가 사라졌나?"로 오해합니다. 여기선 403이 정확합니다.
+
 `requireRole`은 내부에서 반드시 `requireMember`를 먼저 호출합니다. 순서가 뒤집히면 비멤버가 403을 받아 존재 은닉이 깨집니다. 이 순서를 `ProjectAccessGuardTest`로 잠갔습니다.
 
 
@@ -263,7 +267,9 @@ Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) { ..
 ```
 
 **왜.** 과제 문구는 "요청자의 식별자는 API 파라미터로 전달된다고 가정합니다"입니다. 인증 정보는 리소스 파라미터와 다른 공간에 있어야 한다고 봤습니다.
+
 부수 효과로 resolver는 **사용자 존재를 검사하지 않습니다.** 없는 id는 `requireMember`에서 멤버십 부재로 자연히 404가 되고, 덕분에 resolver에 `UserRepository` 의존이 붙지 않아 단위 테스트가 순수합니다.
+
 다만 `POST /api/projects`는 이 게이트가 덮지 못하는 유일한 진입점이라, 거기서만 사용자 존재를 명시적으로 확인합니다. 없으면 FK 위반 500이 아니라 404입니다.
 
 
@@ -280,6 +286,7 @@ Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) { ..
 **결론.** 공통 envelope(`ApiResponse<T>`)을 쓰지 않았습니다. `spring.mvc.problemdetails.enabled: true` 한 줄로 끝나고, Spring Boot 3 내장이라 추가 의존성이 0입니다.
 
 **왜.** HTTP 상태 코드가 이미 성공/실패를 표현하는데 바디의 `"success": true`는 같은 정보의 이중 표현입니다. 오류만 RFC 9457로 두고 성공을 envelope으로 감싸면 응답 형식이 오히려 두 종류가 되어 일관성이 깨집니다.
+
 목록은 Spring `Page`가 그대로 나가 페이징 코드가 0줄이고, springdoc 스키마도 깨끗합니다. 제네릭 래핑은 `ApiResponseProjectResponse` 같은 스키마 이름을 만들어냅니다.
 
 **감수한 비용.** envelope의 실익인 traceId 같은 공통 메타를 실을 자리가 없습니다. 이 규모에서는 요구가 없습니다.
@@ -295,6 +302,7 @@ com.example.collab
 ```
 
 **왜.** 이 과제의 난이도 핵심은 권한 규칙인데, 그게 전부 `project/` 한 폴더에 응집됩니다. 계층형(`controller/ service/ repository/`)이면 `ProjectService`·`TaskService`·`ProjectAccessGuard`가 각각 다른 폴더로 흩어져, 권한 규칙 한 덩어리를 읽으려면 폴더 4개를 오가며 읽어야 합니다. 도메인이 3개뿐이라 폴더 폭발도 없습니다.
+
 계층 간 책임 분리(컨트롤러에 로직 없음, 엔티티 직접 노출 없음)는 그대로 지킵니다. 폴더 배치와 별개 문제입니다.
 
 ### 작업 목록 검색·필터·페이징 — 단일 `@Query`
@@ -310,6 +318,7 @@ Page<Task> search(Long projectId, String keyword, TaskStatus status, Pageable pa
 ```
 
 **왜.** 프로젝트 경계(`t.project.id = :projectId`)가 **쿼리 안에** 있습니다. 애플리케이션에서 걸러내는 방식과 달리 타 프로젝트 데이터 혼입이 구조적으로 불가능합니다. 목록뿐 아니라 단건 조회도 `findByIdAndProjectId`로 경계를 함께 겁니다.
+
 빈 문자열 `?keyword=`는 서비스에서 `null`로 정규화합니다. 그대로 두면 `LIKE '%%'`가 되어 모든 작업이 통과해 필터가 적용되지 않습니다.
 
 **감수한 비용.** 조건이 6~7개로 늘면 읽기 어려워집니다. 그 시점이 QueryDSL 도입이 정당해지는 시점이고, 이 과제 범위에서는 오지 않습니다. QueryDSL을 왜 지금 넣지 않았는지는 [쓰지 않기로 한 기술](#쓰지-않기로-한-기술)에 정리했습니다.

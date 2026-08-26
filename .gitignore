@@ -1,11 +1,9 @@
 .omc/
 .DS_Store
 
-# 내부 설계 노트 — 커밋 대상 아님
-docs/design-decisions.md
+# 내부 노트 — 커밋 대상 아님
 docs/spec-gap-policy.md
 docs/interview-prep.md
-docs/implementation-log.md
 
 # 빌드 산출물
 build/

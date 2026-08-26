@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,7 +35,7 @@ public class ProjectController {
     }
 
     @GetMapping
-    public Page<ProjectResponse> findMine(@CurrentUser Long userId, Pageable pageable) {
+    public Page<ProjectResponse> findMine(@CurrentUser Long userId, @ParameterObject Pageable pageable) {
         return projectService.findMine(userId, pageable);
     }
 

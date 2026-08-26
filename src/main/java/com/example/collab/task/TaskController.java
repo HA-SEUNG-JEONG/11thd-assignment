@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,7 +43,7 @@ public class TaskController {
                                      @CurrentUser Long userId,
                                      @RequestParam(required = false) String keyword,
                                      @RequestParam(required = false) TaskStatus status,
-                                     Pageable pageable) {
+                                     @ParameterObject Pageable pageable) {
         return taskService.search(projectId, userId, keyword, status, pageable);
     }
 

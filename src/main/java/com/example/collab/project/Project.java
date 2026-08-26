@@ -32,7 +32,6 @@ public class Project extends BaseTimeEntity {
         this.description = description;
     }
 
-    /** 부분 수정. null은 "미변경"을 뜻하므로 덮어쓰지 않는다. */
     public void update(String name, String description) {
         if (name != null) {
             this.name = name;

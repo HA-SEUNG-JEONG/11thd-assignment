@@ -15,7 +15,6 @@ public class UserService {
 
     private final UserRepository userRepository;
 
-    /** 이메일 중복은 리소스의 현재 상태와의 충돌이므로 409. */
     @Transactional
     public UserResponse create(UserCreateRequest request) {
         if (userRepository.existsByEmail(request.email())) {
